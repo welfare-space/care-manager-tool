@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ケアマネジャー訪問記録ツール</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+        body { font-family: 'Inter', 'Noto Sans JP', sans-serif; }
+        .recording-indicator::after {
+            content: ''; display: inline-block; width: 10px; height: 10px;
+            background-color: red; border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.2; } 100% { opacity: 1; } }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <header class="bg-white shadow-md">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 class="text-xl font-bold text-blue-600">訪問記録ツール</h1>
+            <div id="auth-container">
+                <button id="loginButton" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Googleでログイン</button>
+                <div id="userInfo" class="hidden items-center">
+                    <img id="userIcon" class="w-8 h-8 rounded-full mr-3" src="" alt="User Icon">
+                    <span id="userName" class="text-sm mr-4"></span>
+                    <button id="logoutButton" class="text-sm text-gray-600 hover:text-blue-600">ログアウト</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div id="app-container">
+
+        <!-- ▼▼▼ 利用者一覧ページ ▼▼▼ -->
+        <main id="client-list-page" class="container mx-auto px-4 py-8 hidden">
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-2xl font-bold mb-4 border-b pb-3">利用者一覧</h2>
+                <div class="mb-6 bg-gray-50 p-4 rounded-lg">
+                    <h3 class="text-lg font-semibold mb-2">新規利用者を追加</h3>
+                    <div class="flex space-x-2">
+                        <input type="text" id="newClientName" class="flex-grow p-2 border rounded-lg" placeholder="利用者名を入力">
+                        <button id="addClientButton" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">追加</button>
+                    </div>
+                </div>
+                <ul id="client-list" class="space-y-2"></ul>
+            </div>
+        </main>
+
+        <!-- ▼▼▼ 履歴ページ（新規追加） ▼▼▼ -->
+        <main id="history-page" class="container mx-auto px-4 py-8 hidden">
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <button id="backToListButton" class="mb-4 text-sm text-blue-600 hover:underline">&lt; 利用者一覧に戻る</button>
+                <div class="mb-4 border-b pb-3">
+                    <h2 id="historyClientName" class="text-2xl font-bold"></h2>
+                </div>
+                <button id="newRecordButton" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg mb-6">
+                    新規訪問記録を作成
+                </button>
+                <h3 class="text-lg font-semibold mb-2">過去の訪問記録</h3>
+                <ul id="record-history-list" class="space-y-3"></ul>
+            </div>
+        </main>
+
+        <!-- ▼▼▼ 訪問記録ページ ▼▼▼ -->
+        <main id="recording-page" class="container mx-auto px-4 py-8 hidden">
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <button id="backToHistoryButton" class="mb-4 text-sm text-blue-600 hover:underline">&lt; 履歴一覧に戻る</button>
+                <div class="mb-6 border-b pb-4">
+                    <h2 id="recordingClientName" class="text-2xl font-bold mb-2"></h2>
+                    <p class="text-gray-600" id="visitDate"></p>
+                </div>
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold">音声記録</h3>
+                    <div class="flex items-center space-x-4 my-3">
+                        <button id="startButton" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg">録音開始</button>
+                        <button id="stopButton" class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg" disabled>録音と要約</button>
+                        <div id="status" class="text-gray-500 font-medium">待機中...</div>
+                    </div>
+                    <div id="audioPlayerContainer" class="hidden mt-3">
+                        <audio id="audioPlayer" controls class="w-full"></audio>
+                    </div>
+                </div>
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold">リアルタイム文字起こし & AI要約</h3>
+                    <div id="loadingSpinner" class="hidden items-center space-x-2 text-gray-500 my-3">
+                        <svg class="animate-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                        <span>Geminiが要約を生成中です...</span>
+                    </div>
+                    <textarea id="summaryText" class="w-full h-48 p-3 border rounded-lg mt-2" placeholder="..."></textarea>
+                </div>
+                <div>
+                    <button id="saveButton" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg">
+                        <span id="saveButtonText">この内容で記録を保存</span>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        // --- Firebase Initialization ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBeXO3XV9O92sBnJIfJZ_kCkTyWHXb5qp8",
+            authDomain: "care-manager-tool.firebaseapp.com",
+            projectId: "care-manager-tool",
+            storageBucket: "care-manager-tool.appspot.com",
+            messagingSenderId: "883631164728",
+            appId: "1:883631164728:web:1a3ade46e18e14ff78c5cd"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // --- Global State ---
+        let currentClient = null;
+        let unsubscribeClients = null;
+        let unsubscribeHistory = null;
+
+        // --- DOM Elements ---
+        const loginButton = document.getElementById('loginButton');
+        const logoutButton = document.getElementById('logoutButton');
+        const userInfo = document.getElementById('userInfo');
+        const userIcon = document.getElementById('userIcon');
+        const userName = document.getElementById('userName');
+
+        const clientListPage = document.getElementById('client-list-page');
+        const historyPage = document.getElementById('history-page');
+        const recordingPage = document.getElementById('recording-page');
+
+        const newClientNameInput = document.getElementById('newClientName');
+        const addClientButton = document.getElementById('addClientButton');
+        const clientListUl = document.getElementById('client-list');
+        
+        const backToListButton = document.getElementById('backToListButton');
+        const historyClientName = document.getElementById('historyClientName');
+        const newRecordButton = document.getElementById('newRecordButton');
+        const recordHistoryList = document.getElementById('record-history-list');
+
+        const backToHistoryButton = document.getElementById('backToHistoryButton');
+        const recordingClientName = document.getElementById('recordingClientName');
+        const visitDate = document.getElementById('visitDate');
+        
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const saveButton = document.getElementById('saveButton');
+        const saveButtonText = document.getElementById('saveButtonText');
+        const statusDiv = document.getElementById('status');
+        const summaryText = document.getElementById('summaryText');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const audioPlayerContainer = document.getElementById('audioPlayerContainer');
+        const audioPlayer = document.getElementById('audioPlayer');
+
+        // --- Page Navigation ---
+        function showPage(pageToShow) {
+            [clientListPage, historyPage, recordingPage].forEach(page => {
+                page.classList.add('hidden');
+            });
+            if (pageToShow) {
+                pageToShow.classList.remove('hidden');
+            }
+        }
+
+        function showHistoryPage(client) {
+            currentClient = client;
+            historyClientName.textContent = `${client.name} 様`;
+            loadVisitHistory(client.id);
+            showPage(historyPage);
+        }
+
+        function showRecordingPage() {
+            recordingClientName.textContent = `${currentClient.name} 様`;
+            const today = new Date();
+            visitDate.textContent = `訪問日: ${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
+            showPage(recordingPage);
+        }
+
+        backToListButton.addEventListener('click', () => showPage(clientListPage));
+        newRecordButton.addEventListener('click', showRecordingPage);
+        backToHistoryButton.addEventListener('click', () => showHistoryPage(currentClient));
+
+        // --- Auth Logic ---
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                userInfo.classList.remove('hidden');
+                userInfo.classList.add('flex');
+                loginButton.classList.add('hidden');
+                userName.textContent = user.displayName;
+                userIcon.src = user.photoURL;
+                showPage(clientListPage);
+                loadClients(user.uid);
+            } else {
+                userInfo.classList.add('hidden');
+                loginButton.classList.remove('hidden');
+                showPage(null); // Hide all pages
+                if (unsubscribeClients) unsubscribeClients();
+                if (unsubscribeHistory) unsubscribeHistory();
+            }
+        });
+        const provider = new GoogleAuthProvider();
+        loginButton.addEventListener('click', () => signInWithPopup(auth, provider));
+        logoutButton.addEventListener('click', () => signOut(auth));
+
+        // --- Client & History Management ---
+        function loadClients(uid) {
+            const q = query(collection(db, "clients"), where("userId", "==", uid));
+            unsubscribeClients = onSnapshot(q, (snapshot) => {
+                clientListUl.innerHTML = '';
+                if (snapshot.empty) {
+                    clientListUl.innerHTML = '<li class="p-3 text-center text-gray-500">利用者がいません。</li>';
+                    return;
+                }
+                snapshot.forEach((doc) => {
+                    const client = { id: doc.id, ...doc.data() };
+                    const li = document.createElement('li');
+                    li.className = 'p-4 bg-gray-100 hover:bg-blue-100 rounded-lg cursor-pointer';
+                    li.textContent = client.name;
+                    li.onclick = () => showHistoryPage(client);
+                    clientListUl.appendChild(li);
+                });
+            });
+        }
+
+        function loadVisitHistory(clientId) {
+            if (unsubscribeHistory) unsubscribeHistory();
+            const user = auth.currentUser;
+            if (!user) return;
+            // ▼▼▼ ここを修正 ▼▼▼
+            const q = query(collection(db, "visit_records"), where("clientId", "==", clientId), where("userId", "==", user.uid));
+            // ▲▲▲ ここまで ▲▲▲
+            unsubscribeHistory = onSnapshot(q, (snapshot) => {
+                recordHistoryList.innerHTML = '';
+                if (snapshot.empty) {
+                    recordHistoryList.innerHTML = '<li class="p-3 text-center text-gray-500">訪問記録はまだありません。</li>';
+                    return;
+                }
+                snapshot.docs.sort((a, b) => b.data().createdAt - a.data().createdAt).forEach((doc) => {
+                    const record = doc.data();
+                    const date = record.createdAt.toDate();
+                    const dateString = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+                    const li = document.createElement('li');
+                    li.className = 'p-3 border rounded-lg';
+                    li.innerHTML = `<p class="font-semibold">${dateString}</p><p class="text-gray-600 mt-1 whitespace-pre-wrap">${record.summary}</p>`;
+                    recordHistoryList.appendChild(li);
+                });
+            }, (error) => {
+                console.error("履歴の読み込みエラー:", error);
+                recordHistoryList.innerHTML = `<li class="p-3 text-center text-red-500">履歴の読み込みに失敗しました。データベースのインデックスが必要な可能性があります。詳細はデベロッパーツールのコンソールを確認してください。</li>`;
+            });
+        }
+
+        addClientButton.addEventListener('click', async () => {
+            const user = auth.currentUser;
+            const clientName = newClientNameInput.value.trim();
+            if (!clientName || !user) return;
+            await addDoc(collection(db, "clients"), { name: clientName, userId: user.uid, createdAt: serverTimestamp() });
+            newClientNameInput.value = '';
+        });
+
+        // --- Save Logic ---
+        saveButton.addEventListener('click', async () => {
+            const user = auth.currentUser;
+            if (!user || !currentClient) return;
+            const contentToSave = summaryText.value.trim();
+            if (!contentToSave) return;
+            saveButton.disabled = true;
+            saveButtonText.textContent = '保存中...';
+            await addDoc(collection(db, "visit_records"), {
+                userId: user.uid,
+                clientId: currentClient.id,
+                clientName: currentClient.name,
+                summary: contentToSave,
+                createdAt: serverTimestamp()
+            });
+            saveButtonText.textContent = 'この内容で記録を保存';
+            saveButton.disabled = false;
+            showHistoryPage(currentClient); // 保存後は履歴ページに戻る
+        });
+
+        // --- Recording & AI Summary Logic (no changes) ---
+        let mediaRecorder; 
+        let audioChunks = [];
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'ja-JP';
+        recognition.interimResults = true;
+        recognition.continuous = true;
+        let finalTranscript = '';
+
+        recognition.onresult = (event) => {
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+            summaryText.value = finalTranscript + interimTranscript;
+        };
+
+        startButton.addEventListener('click', async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.addEventListener('start', () => {
+                    audioChunks = [];
+                    finalTranscript = '';
+                    summaryText.value = '';
+                    startButton.disabled = true;
+                    stopButton.disabled = false;
+                    statusDiv.textContent = '録音中...';
+                    statusDiv.classList.add('recording-indicator');
+                    audioPlayerContainer.classList.add('hidden');
+                    recognition.start();
+                });
+                mediaRecorder.addEventListener('dataavailable', event => audioChunks.push(event.data));
+                mediaRecorder.addEventListener('stop', () => {
+                    recognition.stop();
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    audioPlayer.src = audioUrl;
+                    audioPlayerContainer.classList.remove('hidden');
+                    triggerAiSummary();
+                });
+                mediaRecorder.start();
+            } catch (error) {
+                statusDiv.textContent = 'エラー: マイクの使用が許可されていません。';
+            }
+        });
+
+        stopButton.addEventListener('click', () => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+        });
+
+        async function callGeminiApi(text) {
+            const prompt = `以下の会話は、ケアマネジャーと利用者との間の訪問時の会話です。この内容を、客観的な事実に基づいた訪問記録として、箇条書きで簡潔に要約してください。\n\n---\n${text}\n---`;
+            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+            const geminiApiKey = "AIzaSyD4ZBv9Tl0mz9S2lFk9KJrIJGbRsBINeLM"; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${geminiApiKey}`;
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error(`APIエラー: ${response.status} ${response.statusText}`);
+                const result = await response.json();
+                return result.candidates?.[0]?.content?.parts?.[0]?.text || "要約の取得に失敗しました。";
+            } catch (error) {
+                return `エラーが発生しました: ${error.message}`;
+            }
+        }
+
+        async function triggerAiSummary() {
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            statusDiv.textContent = 'AIが要約を生成中...';
+            statusDiv.classList.remove('recording-indicator');
+            loadingSpinner.classList.remove('hidden');
+            summaryText.classList.add('hidden');
+            const transcribedText = finalTranscript;
+            if (!transcribedText.trim()) {
+                statusDiv.textContent = '音声が認識されませんでした。';
+                loadingSpinner.classList.add('hidden');
+                summaryText.classList.remove('hidden');
+                summaryText.value = "文字起こしされたテキストがありません。";
+                return;
+            }
+            const summaryResult = await callGeminiApi(transcribedText);
+            loadingSpinner.classList.add('hidden');
+            summaryText.classList.remove('hidden');
+            summaryText.value = summaryResult;
+            statusDiv.textContent = '要約完了。内容を確認・編集してください。';
+        }
+    </script>
+</body>
+</html>
